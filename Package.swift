@@ -9,8 +9,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
-        .package(url: "https://github.com/ivantokar/hokusai.git", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-testing.git", from: "0.7.0"),
+        // Hokusai 2.0 is developed on this branch; this becomes `from: "2.0.0"` at release.
+        .package(url: "https://github.com/ivantokar/hokusai.git", branch: "release/2.0"),
     ],
     targets: [
         .target(
@@ -18,13 +18,14 @@ let package = Package(
             dependencies: [
                 .product(name: "Hummingbird", package: "hummingbird"),
                 .product(name: "Hokusai", package: "hokusai"),
+                .product(name: "HokusaiNIO", package: "hokusai"),
             ]
         ),
         .testTarget(
             name: "HokusaiHummingbirdTests",
             dependencies: [
                 "HokusaiHummingbird",
-                .product(name: "Testing", package: "swift-testing"),
+                .product(name: "HummingbirdTesting", package: "hummingbird"),
             ]
         ),
     ]

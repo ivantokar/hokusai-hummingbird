@@ -4,18 +4,20 @@
 
 # Hokusai Hummingbird
 
-[Hummingbird 2](https://github.com/hummingbird-project/hummingbird) integration for [Hokusai 1.0](https://github.com/ivantokar/hokusai). Decode a raw image upload into an immutable pipeline, transform it, then return an asynchronous image or PDF response.
+[Hummingbird 2](https://github.com/hummingbird-project/hummingbird) integration for [Hokusai 2](https://github.com/ivantokar/hokusai). Read a raw image upload into an immutable pipeline, transform it, and stream the encoded image or PDF back with Hummingbird's backpressure.
+
+This package is a thin layer. Streaming, cancellation and limits are Hokusai's own (`writeByteBuffers` in `HokusaiNIO`, built on the core `writeChunks`); nothing here is a second native bridge, and no Hummingbird type reaches Hokusai.
 
 ## Requirements
 
-- Swift 6.0+, Hummingbird 2, and Hokusai 1.0.
-- libvips and Cairo with PDF support.
+- Swift 6.0+ (CI runs Swift 6.4), Hummingbird 2.x, Hokusai 2.
+- libvips 8.16+ and Cairo with PDF support.
 
 ```bash
 # macOS
 brew install vips cairo pkg-config
 
-# Ubuntu/Debian
+# Ubuntu/Debian (libvips must be 8.16 or newer; build it if your distribution is older)
 sudo apt install libvips-dev libcairo2-dev pkg-config
 ```
 
@@ -24,82 +26,101 @@ sudo apt install libvips-dev libcairo2-dev pkg-config
 ```swift
 dependencies: [
     .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
-    .package(url: "https://github.com/ivantokar/hokusai-hummingbird.git", from: "1.0.0")
+    .package(url: "https://github.com/ivantokar/hokusai-hummingbird.git", from: "2.0.0")
 ]
 ```
 
-Add `HokusaiHummingbird` to the target that defines your routes.
+Add `HokusaiHummingbird` to the target that defines your routes. While Hokusai 2.0 is unreleased the package tracks its `release/2.0` branch.
 
 ## Configure at startup
 
 ```swift
-import HokusaiHummingbird
+import Hokusai
 
+try Hokusai.configure(.init(maxConcurrentEvaluations: .fixed(4), maxQueuedEvaluations: 64))
 try Hokusai.initialize()
 ```
 
-Hokusai also initializes lazily when an image is loaded. Calling `initialize()` is recommended so native-runtime failures appear at startup. Do not call `Hokusai.shutdown()` in a normal server lifecycle.
+Configuration freezes at first use, so do it before the first request. Hokusai initializes lazily otherwise; calling `initialize()` surfaces native-runtime failures at startup.
 
-## Raw image upload
-
-Hummingbird 2 streams request bodies. `hokusaiImage()` consumes that stream once and enforces a 20 MiB limit by default.
+## Upload, transform, respond
 
 ```swift
 import HokusaiHummingbird
 import Hummingbird
 
 let router = Router()
-router.post("resize") { request, _ async throws -> Response in
-    let image = try await request.hokusaiImage()
-    let resized = try image.resize(width: 800, height: 600, fit: .cover)
-    return try await resized.response(format: "jpeg", quality: 85)
+router.add(middleware: HokusaiErrorMiddleware())
+
+router.post("resize") { request, _ -> Response in
+    let image = try await request.hokusaiImage()                 // 413 above 20 MiB
+    return try await image
+        .resize(width: 800, height: 600, fit: .cover)
+        .webp(quality: 82)                                       // choose the encoder on the pipeline
+        .response()                                              // Content-Type: image/webp
 }
 ```
 
 ```bash
-curl -X POST http://localhost:8080/resize \
-  --data-binary "@photo.jpg" \
-  -o output.jpg
+curl -X POST http://localhost:8080/resize --data-binary "@photo.jpg" -o output.webp
 ```
 
-Pass a custom size limit when necessary:
+### Upload limits
+
+Hokusai decodes a complete source, so `hokusaiImage` collects the body, but never past its limit: a declared `Content-Length` over `maximumSize` is rejected before a byte is read, and a body without one is rejected as soon as it grows past the limit (`413 Content Too Large`). An empty body is `400`.
 
 ```swift
-let image = try await request.hokusaiImage(maximumSize: 5 * 1024 * 1024)
+let image = try await request.hokusaiImage(
+    options: InputOptions(limits: InputLimits(maxPixels: 50_000_000)),   // Hokusai's own decode limits
+    maximumSize: 5 * 1024 * 1024)
 ```
 
-Missing or invalid image data returns `400 Bad Request`; oversized uploads return `413 Content Too Large`.
+Large uploads that should not sit in memory (bounded temp-file spooling) are not handled yet; that needs source semantics Hokusai does not have.
 
-## Image and PDF responses
+### Streamed responses
 
-`response` evaluates Hokusai's pipeline asynchronously and sets the correct `Content-Type` header.
+`response()` writes through `Hokusai.writeByteBuffers`, so each buffer is handed to Hummingbird's `ResponseBodyWriter` as it is encoded and a slow client slows encoding down. At most four 64 KiB buffers of encoded output are held, whatever the image size. When the client disconnects Hummingbird cancels the request task and the evaluation stops. PDF takes the same path.
 
 ```swift
-try await image.response(format: "jpeg", quality: 85)
-try await image.response(format: "png", compression: 6)
-try await image.response(format: "webp", quality: 82)
-try await image.response(format: "avif", quality: 50)
-try await image.response(format: "pdf")
+try await image.png(compressionLevel: 6).response()
+try await image.pdf().response(status: .created, headers: [.cacheControl: "no-store"])
+try await image.avif(quality: 50).response(chunkSize: 128 * 1024)
 ```
 
-The PDF response is a Cairo-backed PDF containing Hokusai's evaluated raster page. It is suited to image reports and layered compositions, but does not currently preserve selectable vector text. The planned vector-PDF API is tracked in [Hokusai issue #13](https://github.com/ivantokar/hokusai/issues/13).
+- The body is chunked; there is no `Content-Length`, because the size is unknown until encoding ends.
+- `Content-Type` comes from the encoder the pipeline carries. A pipeline without one is a `500`.
+- Before the response is committed the source header is read, so a missing or unreadable image is a `4xx` rather than a broken `200`. A failure after the first byte can only end the stream early, which is how HTTP works once headers are sent.
+- TIFF is encoded in memory first, then streamed.
+
+### Errors
+
+`HokusaiErrorMiddleware` turns a `HokusaiError` thrown by a route into an HTTP error; `hokusaiImage` and `response` already do this for what they run. Add the middleware for routes that evaluate a pipeline themselves with `data()` or `write(to:)`.
+
+| `HokusaiError` | Status |
+| --- | --- |
+| `invalidInput`, `invalidOption` | 400 |
+| `decode` | 422 |
+| `resource` (bytes) | 413 |
+| `resource` (pixels, channels) | 422 |
+| `resource` (evaluation queue full) | 503 |
+| `unsupported` | 501 |
+| `io`, `transform`, `encode`, `runtime` | 500 |
+
+`error.httpStatus` and `error.httpError` are public if you want a different policy.
 
 ## Example: image report PDF
 
 ```swift
-router.post("report") { request, _ async throws -> Response in
+router.post("report") { request, _ -> Response in
     let image = try await request.hokusaiImage()
     let report = try image
         .resize(width: 1240, height: 1754, fit: .contain)
-        .drawText(
-            "Monthly report",
-            x: 72,
-            y: 96,
-            options: TextOptions(font: "sans Bold", fontSize: 52, color: [20, 30, 50, 255])
-        )
-    return try await report.response(format: "pdf")
+        .pdf(pageSize: .a4(), margins: .all(36), background: .white)
+    return try await report.response()
 }
 ```
+
+The PDF is a Cairo-backed document containing the evaluated raster page; selectable vector text is tracked in [Hokusai issue #13](https://github.com/ivantokar/hokusai/issues/13).
 
 ## Related projects
 
