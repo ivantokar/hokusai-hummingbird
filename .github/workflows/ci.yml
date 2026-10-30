@@ -58,7 +58,8 @@ jobs:
 
       - name: Track Hummingbird main
         if: matrix.hummingbird == 'main'
-        run: sed -i 's|from: "2.0.0"|branch: "main"|' Package.swift
+        run: |
+          sed -i 's|from: "2.0.0"|branch: "main"|' Package.swift
 
       - name: Build
         run: swift build --build-tests
