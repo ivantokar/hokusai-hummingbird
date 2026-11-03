@@ -9,8 +9,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
-        // Hokusai 2.0 is developed on this branch; this becomes `from: "2.0.0"` at release.
-        .package(url: "https://github.com/ivantokar/hokusai.git", branch: "release/2.0"),
+        .package(url: "https://github.com/ivantokar/hokusai.git", from: "2.0.0"),
     ],
     targets: [
         .target(
