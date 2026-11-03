@@ -30,7 +30,7 @@ dependencies: [
 ]
 ```
 
-Add `HokusaiHummingbird` to the target that defines your routes. While Hokusai 2.0 is unreleased the package tracks its `release/2.0` branch.
+Add `HokusaiHummingbird` to the target that defines your routes.
 
 ## Configure at startup
 
