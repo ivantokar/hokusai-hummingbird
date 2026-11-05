@@ -67,7 +67,7 @@ curl -X POST http://localhost:8080/resize --data-binary "@photo.jpg" -o output.w
 
 ### Upload limits
 
-Hokusai decodes a complete source, so `hokusaiImage` collects the body, but never past its limit: a declared `Content-Length` over `maximumSize` is rejected before a byte is read, and a body without one is rejected as soon as it grows past the limit (`413 Content Too Large`). An empty body is `400`.
+`hokusaiImage` reads the body as it arrives, never past its limit: a declared `Content-Length` over `maximumSize` is rejected before a byte is read, and a body without one is rejected as soon as it grows past the limit (`413 Content Too Large`). An empty body is `400`.
 
 ```swift
 let image = try await request.hokusaiImage(
@@ -75,7 +75,15 @@ let image = try await request.hokusaiImage(
     maximumSize: 5 * 1024 * 1024)
 ```
 
-Large uploads that should not sit in memory (bounded temp-file spooling) are not handled yet; that needs source semantics Hokusai does not have.
+A small upload stays in memory. One larger than `memoryLimit` (1 MiB by default) moves to a private temporary file (`Hokusai(spooling:)`), so the encoded upload takes at most `memoryLimit` plus one chunk of memory however large `maximumSize` is. The pipeline owns the file and removes it when the last copy of the pipeline is released; a process that dies first leaves `hokusai-upload-*` files in `spoolDirectory` (the system temporary directory by default), which a server can sweep at start.
+
+```swift
+let image = try await request.hokusaiImage(
+    maximumSize: 200 * 1024 * 1024,   // raised: the body is spooled, not held
+    memoryLimit: 1 << 20)
+```
+
+This bounds the memory of the encoded upload; decoding is bounded separately by `InputLimits.maxPixels`.
 
 ### Streamed responses
 
