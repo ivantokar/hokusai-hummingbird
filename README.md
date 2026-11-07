@@ -6,6 +6,8 @@
 
 [Hummingbird 2](https://github.com/hummingbird-project/hummingbird) integration for [Hokusai 2](https://github.com/ivantokar/hokusai). Read a raw image upload into an immutable pipeline, transform it, and stream the encoded image or PDF back with Hummingbird's backpressure.
 
+**Documentation: <https://ivantokar.com/oss/hokusai/integrations/hummingbird/>** · [all Hokusai documentation](https://ivantokar.com/oss/hokusai/) · [Українською](https://ivantokar.com/oss/hokusai/uk/integrations/hummingbird/)
+
 This package is a thin layer. Streaming, cancellation and limits are Hokusai's own (`writeByteBuffers` in `HokusaiNIO`, built on the core `writeChunks`); nothing here is a second native bridge, and no Hummingbird type reaches Hokusai.
 
 ## Requirements
@@ -132,5 +134,6 @@ The PDF is a Cairo-backed document containing the evaluated raster page; selecta
 
 ## Related projects
 
+- [Documentation](https://ivantokar.com/oss/hokusai/)
 - [Hokusai](https://github.com/ivantokar/hokusai)
 - [Hokusai Vapor](https://github.com/ivantokar/hokusai-vapor)
