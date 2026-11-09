@@ -135,5 +135,6 @@ The PDF is a Cairo-backed document containing the evaluated raster page; selecta
 ## Related projects
 
 - [Documentation](https://ivantokar.com/oss/hokusai/)
+- [Examples](https://github.com/ivantokar/hokusai-examples): a web playground on Vapor and Hummingbird, and a macOS playground
 - [Hokusai](https://github.com/ivantokar/hokusai)
 - [Hokusai Vapor](https://github.com/ivantokar/hokusai-vapor)
