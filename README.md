@@ -10,9 +10,13 @@
 
 This package is a thin layer. Streaming, cancellation and limits are Hokusai's own (`writeByteBuffers` in `HokusaiNIO`, built on the core `writeChunks`); nothing here is a second native bridge, and no Hummingbird type reaches Hokusai.
 
+## Contents
+
+[Requirements](#requirements) · [Installation](#installation) · [Configure at startup](#configure-at-startup) · [Upload, transform, respond](#upload-transform-respond) · [Errors](#errors) · [Example: image report PDF](#example-image-report-pdf) · [Related projects](#related-projects)
+
 ## Requirements
 
-- Swift 6.0+ (CI runs Swift 6.4), Hummingbird 2.x, Hokusai 2.
+- Swift 6.0+ (CI runs Swift 6.4), Hummingbird 2.x, Hokusai 2.2+.
 - libvips 8.16+ and Cairo with PDF support.
 
 ```bash
@@ -130,11 +134,15 @@ router.post("report") { request, _ -> Response in
 }
 ```
 
-The PDF is a Cairo-backed document containing the evaluated raster page; selectable vector text is tracked in [Hokusai issue #13](https://github.com/ivantokar/hokusai/issues/13).
+The PDF is a Cairo-backed document containing the evaluated raster page, so text drawn into the pipeline is not selectable. For selectable text and vector content build a document with the core's `HokusaiPDF` product; see [vector PDF documents](https://ivantokar.com/oss/hokusai/pdf/vector/).
 
 ## Related projects
 
-- [Documentation](https://ivantokar.com/oss/hokusai/)
-- [Examples](https://github.com/ivantokar/hokusai-examples): a web playground on Vapor and Hummingbird, and a macOS playground
-- [Hokusai](https://github.com/ivantokar/hokusai)
-- [Hokusai Vapor](https://github.com/ivantokar/hokusai-vapor)
+- [Hokusai](https://github.com/ivantokar/hokusai): the core library this adapter connects to
+- [Hokusai Vapor](https://github.com/ivantokar/hokusai-vapor): the sibling adapter for Vapor
+- [Hokusai examples](https://github.com/ivantokar/hokusai-examples): a web playground on Vapor and Hummingbird with a minimal upload → resize → response route in each, and a macOS playground
+- [Documentation](https://ivantokar.com/oss/hokusai/) · [Hummingbird guide](https://ivantokar.com/oss/hokusai/integrations/hummingbird/) · [source of the docs](https://github.com/ivantokar/hokusai-docs)
+
+## Contributing and license
+
+Issues and pull requests are welcome; the process is described in the core repository's [CONTRIBUTING.md](https://github.com/ivantokar/hokusai/blob/main/CONTRIBUTING.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md). MIT, see [LICENSE](LICENSE).
